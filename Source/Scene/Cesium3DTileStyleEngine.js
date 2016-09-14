@@ -2,11 +2,13 @@
 define([
        '../Core/Color',
        '../Core/defined',
-       '../Core/defineProperties'
+       '../Core/defineProperties',
+       './PointCloud3DTileContent'
     ], function(
         Color,
         defined,
-        defineProperties) {
+        defineProperties,
+        PointCloud3DTileContent) {
     'use strict';
 
     /**
@@ -15,7 +17,7 @@ define([
     function Cesium3DTileStyleEngine() {
         this._style = undefined;      // The style provided by the user
         this._styleDirty = false;     // true when the style is reassigned
-        this._lastStyleTime = 0;      // The "time" when the last style was assigned
+        this._lastStyleTime = 1;      // The "time" when the last style was assigned. Set to 1 so tiles are styled on the first frame.
     }
 
     defineProperties(Cesium3DTileStyleEngine.prototype, {
@@ -74,7 +76,7 @@ define([
                 //   2) this tile is now visible, but it wasn't visible when the style was first assigned
                 if (tile.lastStyleTime !== lastStyleTime) {
                     tile.lastStyleTime = lastStyleTime;
-                    styleCompositeContent(this, tile.content, stats);
+                    styleCompositeContent(this, frameState, tile.content, stats);
 
                     ++stats.numberOfTilesStyled;
                 }
@@ -82,27 +84,32 @@ define([
         }
     };
 
-    function styleCompositeContent(styleEngine, content, stats) {
+    function styleCompositeContent(styleEngine, frameState, content, stats) {
         var innerContents = content.innerContents;
         if (defined(innerContents)) {
             var length = innerContents.length;
             for (var i = 0; i < length; ++i) {
                 // Recurse for composites of composites
-                styleCompositeContent(styleEngine, innerContents[i], stats);
+                styleCompositeContent(styleEngine, frameState, innerContents[i], stats);
             }
         } else {
             // Not a composite tile
-            styleContent(styleEngine, content, stats);
+            styleContent(styleEngine, frameState, content, stats);
         }
     }
 
     var scratchColor = new Color();
 
-    function styleContent(styleEngine, content, stats) {
+    function styleContent(styleEngine, frameState, content, stats) {
         var length = content.featuresLength;
         var style = styleEngine._style;
 
         stats.numberOfFeaturesStyled += length;
+
+        // Apply style to point cloud
+        if ((length === 0) && (content instanceof PointCloud3DTileContent)) {
+            content.applyStyle(frameState, style);
+        }
 
         if (!defined(style)) {
             clearStyle(content);
